@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>行動卡夾</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --surface2: #24243a;
+    --accent: #7c6ef7;
+    --accent2: #a78bfa;
+    --text: #f0eeff;
+    --text2: #9b97b8;
+    --text3: #5e5a7a;
+    --danger: #f07575;
+    --success: #5dcaa5;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Noto Sans TC', system-ui, sans-serif; min-height: 100vh; max-width: 420px; margin: 0 auto; }
+  .header { padding: 16px 20px; background: linear-gradient(180deg, #13131e 0%, transparent 100%); position: sticky; top: 0; z-index: 10; }
+  .title { font-size: 24px; font-weight: bold; margin-bottom: 12px; }
+  .search { width: 100%; padding: 10px 14px; background: var(--surface); border: 1px solid var(--surface2); border-radius: 10px; color: var(--text); font-size: 14px; }
+  .tabs { display: flex; gap: 8px; margin-top: 12px; overflow-x: auto; }
+  .tab { padding: 6px 16px; border-radius: 20px; border: 1px solid var(--surface2); background: var(--surface); color: var(--text2); font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .tab.active { background: var(--accent); color: #fff; border: none; }
+  .content { padding: 20px; overflow-y: auto; height: calc(100vh - 180px); }
+  .cards { display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--surface2); border-radius: 12px; padding: 16px; display: flex; gap: 12px; cursor: pointer; }
+  .card-icon { font-size: 32px; width: 46px; text-align: center; }
+  .card-info { flex: 1; }
+  .card-name { font-weight: 600; font-size: 15px; }
+  .card-meta { font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .card-expiry { display: inline-block; font-size: 10px; background: rgba(240,117,117,0.15); color: var(--danger); padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+  .card-expiry.ok { background: rgba(93,202,165,0.15); color: var(--success); }
+  .card-actions { display: flex; gap: 8px; }
+  .btn-icon { background: var(--surface2); border: none; color: var(--text); cursor: pointer; width: 32px; height: 32px; border-radius: 6px; }
+  .fab { position: fixed; bottom: 100px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); border: none; color: #fff; font-size: 24px; cursor: pointer; box-shadow: 0 4px 12px rgba(124,110,247,0.4); }
+  .bottom-nav { position: fixed; bottom: 0; width: 100%; max-width: 420px; background: var(--bg); border-top: 1px solid var(--surface2); display: flex; }
+  .nav-item { flex: 1; padding: 12px 0; text-align: center; cursor: pointer; color: var(--text2); font-size: 10px; }
+  .nav-item.active { color: var(--accent); }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; z-index: 100; align-items: flex-end; }
+  .modal.show { display: flex; }
+  .modal-box { background: var(--surface); width: 100%; max-width: 420px; border-radius: 24px 24px 0 0; padding: 24px 20px 40px; }
+  .modal-title { font-size: 18px; font-weight: bold; margin-bottom: 20px; }
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; display: block; }
+  .form-input { width: 100%; padding: 12px 14px; background: var(--bg); border: 1px solid var(--surface2); border-radius: 10px; color: var(--text); font-size: 14px; font-family: inherit; }
+  .btn-primary { width: 100%; padding: 12px; background: var(--accent); border: none; color: #fff; font-size: 16px; font-weight: 600; border-radius: 10px; cursor: pointer; margin-top: 12px; }
+  .empty { text-align: center; padding: 40px 20px; color: var(--text3); }
+  .page { display: none; }
+  .page.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="title">行動卡夾</div>
+  <input type="text" class="search" placeholder="搜尋卡片..." id="search">
+  <div class="tabs" id="tabs"></div>
+</div>
+
+<div class="content">
+  <div class="page active" id="page-cards">
+    <div class="cards" id="cards"></div>
+  </div>
+  <div class="page" id="page-category">
+    <div class="cards" id="category"></div>
+  </div>
+  <div class="page" id="page-expiry">
+    <div class="cards" id="expiry"></div>
+  </div>
+  <div class="page" id="page-settings">
+    <div style="padding: 20px;">
+      <div style="padding: 12px; background: var(--surface); border-radius: 10px; margin-bottom: 10px;">
+        <div style="font-weight: 600;">一鍵備份</div>
+        <div style="font-size: 12px; color: var(--text2); margin-top: 4px;">下載所有卡片資料</div>
+        <button class="btn-primary" style="margin-top: 8px;" onclick="backup()">💾 備份</button>
+      </div>
+      <div style="padding: 12px; background: var(--surface); border-radius: 10px;">
+        <div style="font-weight: 600;">一鍵復原</div>
+        <div style="font-size: 12px; color: var(--text2); margin-top: 4px;">匯入卡片資料</div>
+        <button class="btn-primary" style="margin-top: 8px;" onclick="restore()">📥 復原</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="fab" onclick="addCard()">＋</button>
+
+<div class="bottom-nav">
+  <div class="nav-item active" onclick="switchPage(0, this)">🎫 卡夾</div>
+  <div class="nav-item" onclick="switchPage(1, this)">📂 分類</div>
+  <div class="nav-item" onclick="switchPage(2, this)">⏰ 到期</div>
+  <div class="nav-item" onclick="switchPage(3, this)">⚙️ 設定</div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title">新增卡片</div>
+    <div class="form-group">
+      <label class="form-label">卡片名稱</label>
+      <input type="text" class="form-input" id="f-name" placeholder="例：7-11 會員卡">
+    </div>
+    <div class="form-group">
+      <label class="form-label">類別</label>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;" id="f-types"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">卡號（選填）</label>
+      <input type="text" class="form-input" id="f-number" placeholder="1234 5678 9012">
+    </div>
+    <div class="form-group">
+      <label class="form-label">到期日（選填）</label>
+      <input type="month" class="form-input" id="f-expiry">
+    </div>
+    <div class="form-group">
+      <label class="form-label">備註（選填）</label>
+      <input type="text" class="form-input" id="f-note" placeholder="密碼、備忘等...">
+    </div>
+    <button class="btn-primary" onclick="saveCard()">儲存</button>
+    <button class="btn-primary" style="background: var(--surface); color: var(--text2); margin-top: 8px;" onclick="closeModal()">取消</button>
+  </div>
+</div>
+
+<script>
+const TYPES = [
+  {key:'member', label:'會員卡', icon:'🏪'},
+  {key:'credit', label:'信用卡', icon:'💳'},
+  {key:'id', label:'證件', icon:'🪪'},
+  {key:'other', label:'其他', icon:'📋'},
+];
+
+let cards = JSON.parse(localStorage.getItem('cards') || '[]');
+let activeTab = '全部';
+let editingId = null;
+let selectedType = 'member';
+
+function render() {
+  renderTabs();
+  renderCards();
+}
+
+function renderTabs() {
+  const tabs = ['全部', ...TYPES.map(t=>t.label)];
+  document.getElementById('tabs').innerHTML = tabs.map(t=>
+    `<div class="tab${activeTab===t?' active':''}" onclick="setTab('${t}')">${t}</div>`
+  ).join('');
+}
+
+function setTab(t) { activeTab = t; render(); }
+
+function renderCards() {
+  const q = document.getElementById('search').value.toLowerCase();
+  let list = cards.filter(c => {
+    const typeLabel = TYPES.find(t=>t.key===c.type)?.label || '其他';
+    const matchTab = activeTab === '全部' || typeLabel === activeTab;
+    const matchQ = !q || c.name.toLowerCase().includes(q);
+    return matchTab && matchQ;
+  });
+
+  const html = list.length === 0 
+    ? '<div class="empty">🪪 尚無卡片，點擊 ＋ 新增</div>'
+    : list.map(c => {
+      const t = TYPES.find(x=>x.key===c.type) || TYPES[3];
+      const exp = c.expiry ? new Date(c.expiry + '-01') : null;
+      const now = new Date();
+      const expStatus = exp ? (exp < now ? 'expired' : (exp.getTime() - now.getTime() < 30*24*60*60*1000 ? 'soon' : 'ok')) : null;
+      const badge = expStatus === 'expired' ? '已過期' : expStatus === 'soon' ? '即將到期' : expStatus === 'ok' ? '有效' : '';
+      return `<div class="card" onclick="showDetail('${c.id}')">
+        <div class="card-icon">${t.icon}</div>
+        <div class="card-info">
+          <div class="card-name">${c.name}</div>
+          <div class="card-meta">${t.label}${c.expiry?' · '+c.expiry:''}${badge?'<span class="card-expiry' + (expStatus==='ok'?' ok':'') + '">' + badge + '</span>':''}</div>
+        </div>
+        <div class="card-actions">
+          <button class="btn-icon" onclick="event.stopPropagation(); editCard('${c.id}')">✏️</button>
+          <button class="btn-icon" onclick="event.stopPropagation(); deleteCard('${c.id}')" style="color: var(--danger);">🗑️</button>
+        </div>
+      </div>`;
+    }).join('');
+
+  document.getElementById('cards').innerHTML = html;
+  
+  // 分類頁
+  const catHtml = TYPES.map(t => {
+    const cnt = cards.filter(c=>c.type===t.key).length;
+    return `<div class="card" onclick="setTab('${t.label}'); switchPage(0, document.querySelector('.nav-item'))">
+      <div class="card-icon">${t.icon}</div>
+      <div class="card-info">
+        <div class="card-name">${t.label}</div>
+        <div class="card-meta">${cnt} 張卡片</div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('category').innerHTML = catHtml;
+
+  // 到期頁
+  const expiryList = cards.filter(c=>c.expiry).sort((a,b)=>a.expiry.localeCompare(b.expiry));
+  const expiryHtml = expiryList.length === 0
+    ? '<div class="empty">🔔 沒有設定到期日的卡片</div>'
+    : expiryList.map(c => {
+      const exp = new Date(c.expiry + '-01');
+      const now = new Date();
+      const expStatus = exp < now ? 'expired' : (exp.getTime() - now.getTime() < 30*24*60*60*1000 ? 'soon' : 'ok');
+      const color = expStatus === 'expired' ? 'var(--danger)' : expStatus === 'soon' ? '#ef9f27' : 'var(--success)';
+      const label = expStatus === 'expired' ? '已過期' : expStatus === 'soon' ? '即將到期' : '有效';
+      return `<div class="card" onclick="showDetail('${c.id}')">
+        <div class="card-info">
+          <div class="card-name">${c.name}</div>
+          <div class="card-meta">${c.expiry}</div>
+        </div>
+        <div style="color: ${color}; font-size: 12px; font-weight: 600;">${label}</div>
+      </div>`;
+    }).join('');
+  document.getElementById('expiry').innerHTML = expiryHtml;
+}
+
+function switchPage(idx, el) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-' + ['cards','category','expiry','settings'][idx]).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function addCard() {
+  editingId = null;
+  selectedType = 'member';
+  document.getElementById('modal-title').textContent = '新增卡片';
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-number').value = '';
+  document.getElementById('f-expiry').value = '';
+  document.getElementById('f-note').value = '';
+  renderTypeButtons();
+  document.getElementById('modal').classList.add('show');
+}
+
+function editCard(id) {
+  const c = cards.find(x=>x.id===id);
+  if(!c) return;
+  editingId = id;
+  selectedType = c.type;
+  document.getElementById('modal-title').textContent = '編輯卡片';
+  document.getElementById('f-name').value = c.name;
+  document.getElementById('f-number').value = c.number || '';
+  document.getElementById('f-expiry').value = c.expiry || '';
+  document.getElementById('f-note').value = c.note || '';
+  renderTypeButtons();
+  document.getElementById('modal').classList.add('show');
+}
+
+function renderTypeButtons() {
+  document.getElementById('f-types').innerHTML = TYPES.map(t=>
+    `<button style="padding: 10px; border-radius: 10px; border: 1px solid ${selectedType===t.key?'var(--accent)':'var(--surface2)'}; background: ${selectedType===t.key?'rgba(124,110,247,0.12)':'var(--bg)'}; color: ${selectedType===t.key?'var(--accent2)':'var(--text2)'}; cursor: pointer; font-family: inherit;" onclick="selectedType='${t.key}'; renderTypeButtons()">
+      ${t.icon} ${t.label}
+    </button>`
+  ).join('');
+}
+
+function saveCard() {
+  const name = document.getElementById('f-name').value.trim();
+  if(!name) { alert('請輸入卡片名稱'); return; }
+  
+  const card = {
+    id: editingId || Date.now().toString(),
+    name,
+    type: selectedType,
+    number: document.getElementById('f-number').value.trim(),
+    expiry: document.getElementById('f-expiry').value,
+    note: document.getElementById('f-note').value.trim(),
+  };
+
+  if(editingId) {
+    cards = cards.map(c=>c.id===editingId?card:c);
+  } else {
+    cards.unshift(card);
+  }
+  
+  localStorage.setItem('cards', JSON.stringify(cards));
+  closeModal();
+  render();
+}
+
+function deleteCard(id) {
+  if(confirm('確定要刪除此卡片？')) {
+    cards = cards.filter(c=>c.id!==id);
+    localStorage.setItem('cards', JSON.stringify(cards));
+    render();
+  }
+}
+
+function showDetail(id) {
+  const c = cards.find(x=>x.id===id);
+  if(!c) return;
+  const t = TYPES.find(x=>x.key===c.type) || TYPES[3];
+  alert(`${t.label}\n${c.name}\n\n卡號: ${c.number || '未設定'}\n到期: ${c.expiry || '未設定'}\n\n點擊編輯或刪除按鈕修改`);
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+}
+
+function backup() {
+  const data = JSON.stringify(cards, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `wallet_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+
+function restore() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const imported = JSON.parse(ev.target.result);
+        if(Array.isArray(imported)) {
+          cards = imported;
+          localStorage.setItem('cards', JSON.stringify(cards));
+          render();
+          alert('已匯入 ' + cards.length + ' 張卡片');
+        }
+      } catch(err) {
+        alert('格式錯誤');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+document.getElementById('search').addEventListener('input', render);
+
+// 初始化示例數據
+if(cards.length === 0) {
+  cards = [
+    {id:'1', name:'全家 FamiPay', type:'member', number:'9876 5432 1000', expiry:'', note:''},
+    {id:'2', name:'國泰世華卡', type:'credit', number:'4567 xxxx xxxx 8901', expiry:'2026-06', note:''},
+    {id:'3', name:'身分證', type:'id', number:'A12345678', expiry:'2030-12', note:''},
+  ];
+  localStorage.setItem('cards', JSON.stringify(cards));
+}
+
+render();
+renderTypeButtons();
+</script>
+
+</body>
+</html>
